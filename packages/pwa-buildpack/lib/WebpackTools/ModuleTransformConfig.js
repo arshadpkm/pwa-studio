@@ -52,9 +52,26 @@ class ModuleTransformConfig {
         }
         if (path.isAbsolute(fileToTransform)) {
             throw this._traceableError(
-                `Invalid fileToTransform path "${fileToTransform}": Absolute fileToTransform paths are not allowed! This transform request from "${requestor}" must provide a relative path to one of its own files.`
+                `Invalid fileToTransform path "${fileToTransform}": Absolute fileToTransform paths are not allowed! This transform request from "${requestor}" must provide a relative path to one of its own files or to a file within the project's local source code.`
             );
         }
+        const belongsToRequestor = fileToTransform.startsWith(requestor);
+        const isRelative = fileToTransform.startsWith('.');
+
+        if (!belongsToRequestor && !isRelative) {
+            throw this._traceableError(
+                `Invalid fileToTransform path "${fileToTransform}": Cannot transform a file provided by another module! This transform request from "${requestor}" must provide a module-relative path to one of its own files, e.g. "${requestor}/some/file", or to a file within the project's local source code, e.g. "./index.css".`
+            );
+        }
+
+        // Capturing in the sync phase so that a resolve failure is traceable.
+        const resolveError = this._traceableError(
+            `ModuleTransformConfig could not resolve ${fileToTransform} in order to transform it with ${transformModule}. Resolver options: ${JSON.stringify(
+                this._resolver.config,
+                null,
+                2
+            )})`
+        );
         let absTransformModule;
         try {
             absTransformModule = require.resolve(transformModule);
@@ -63,18 +80,10 @@ class ModuleTransformConfig {
                 path.join(requestor, transformModule)
             );
         }
-        // make module-absolute if relative
-        const toResolve = fileToTransform.startsWith(requestor)
-            ? fileToTransform
-            : path.join(requestor, fileToTransform);
-        // Capturing in the sync phase so that a resolve failure is traceable.
-        const resolveError = this._traceableError(
-            `ModuleTransformConfig could not resolve ${toResolve} in order to transform it with ${transformModule}.`
-        );
         // push the promise, so we don't run a bunch of resolves all at once
         this._reqs.push(
             this._resolver
-                .resolve(toResolve)
+                .resolve(fileToTransform)
                 .then(absToTransform => ({
                     requestor,
                     type,
