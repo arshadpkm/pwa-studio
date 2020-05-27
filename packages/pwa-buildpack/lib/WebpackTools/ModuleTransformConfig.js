@@ -102,6 +102,7 @@ class ModuleTransformConfig {
     async toLoaderOptions() {
         const byType = {
             babel: {},
+            postcss: {},
             source: {}
         };
         // Some reqs may still be outstanding!
